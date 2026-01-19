@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "982786283947",
+    "project_id": "occasio-866c3",
+    "storage_bucket": "occasio-866c3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:982786283947:android:e6652f75795c8cedc61aee",
+        "android_client_info": {
+          "package_name": "com.occasio"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "982786283947-rib49htm0ftrt9p75bi3fiip9mb94mbl.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAwmOJVL2Qvtm36bD92njZtQFUmJx9gvZs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "982786283947-rib49htm0ftrt9p75bi3fiip9mb94mbl.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
