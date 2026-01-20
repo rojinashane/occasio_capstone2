@@ -1,4 +1,3 @@
-// screens/SignupScreen.js
 import React, { useEffect, useRef, useState } from 'react';
 import {
     View,
@@ -7,59 +6,47 @@ import {
     KeyboardAvoidingView,
     Platform,
     Alert,
-    SafeAreaView,
     Animated,
     Easing,
-    ScrollView,
     ActivityIndicator,
+    ScrollView,
+    Keyboard,
+    TouchableWithoutFeedback,
 } from 'react-native';
-import tw from 'twrnc';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import CustomText from '../components/CustomText';
 import { Ionicons } from '@expo/vector-icons';
+import { auth } from '../firebase';
+import { signInWithEmailAndPassword, reload } from 'firebase/auth';
 
-// Firebase
-import { auth, db } from '../firebase';
-import {
-    createUserWithEmailAndPassword,
-    sendEmailVerification,
-    signOut,
-} from 'firebase/auth';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-
-export default function SignupScreen({ navigation }) {
+export default function LoginScreen({ navigation }) {
     const fadeAnim = useRef(new Animated.Value(0)).current;
-    const slideUpAnim = useRef(new Animated.Value(30)).current;
+    const slideUpAnim = useRef(new Animated.Value(20)).current;
 
     useEffect(() => {
         Animated.parallel([
-            Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+            Animated.timing(fadeAnim, {
+                toValue: 1,
+                duration: 600,
+                useNativeDriver: true
+            }),
             Animated.timing(slideUpAnim, {
                 toValue: 0,
-                duration: 600,
-                easing: Easing.out(Easing.exp),
+                duration: 500,
+                easing: Easing.out(Easing.ease),
                 useNativeDriver: true,
             }),
         ]).start();
     }, []);
 
-    const [firstname, setFirstname] = useState('');
-    const [middlename, setMiddlename] = useState('');
-    const [lastname, setLastname] = useState('');
-    const [username, setUsername] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
 
-    const handleSignup = async () => {
-        // 1. Validation Logic
-        if (!firstname.trim() || !lastname.trim() || !username.trim() || !email.trim() || !password) {
-            Alert.alert('Missing Fields', 'Please fill in all fields marked with *');
-            return;
-        }
-
-        if (password.length < 6) {
-            Alert.alert('Weak Password', 'Password should be at least 6 characters.');
+    const handleLogin = async () => {
+        if (!email.trim() || !password) {
+            Alert.alert('Missing Fields', 'Please enter both email and password.');
             return;
         }
 
@@ -68,78 +55,182 @@ export default function SignupScreen({ navigation }) {
 
         try {
             const cleanEmail = email.trim().toLowerCase();
-
-            // 2. Create User
-            const userCredential = await createUserWithEmailAndPassword(auth, cleanEmail, password);
+            const userCredential = await signInWithEmailAndPassword(auth, cleanEmail, password);
             const user = userCredential.user;
 
-            // 3. Write to Firestore while authenticated
-            const userRef = doc(db, 'users', user.uid);
-            await setDoc(userRef, {
-                firstName: firstname.trim(),
-                middleName: middlename.trim(),
-                lastName: lastname.trim(),
-                username: username.trim(),
-                email: cleanEmail,
-                createdAt: serverTimestamp(),
-                uid: user.uid,
-            });
+            await reload(user);
 
-            // 4. Verification Flow
-            await sendEmailVerification(user);
+            if (!user.emailVerified) {
+                Alert.alert(
+                    'Email Not Verified',
+                    'Please verify your email before logging in. Check your inbox.'
+                );
+                return;
+            }
 
-            // Sign out immediately so they must verify before logging in
-            await signOut(auth);
-
-            Alert.alert(
-                'Verify Email',
-                'Account created! Please check your inbox and verify your email address before logging in.',
-                [{ text: 'OK', onPress: () => navigation.replace('Login') }]
-            );
-
+            navigation.replace('Dashboard');
         } catch (err) {
-            console.error('Signup failed:', err);
-            Alert.alert('Signup Error', err.message);
+            console.error('Login failed:', err);
+            let errorMessage = 'An error occurred. Please try again.';
+
+            if (err.code === 'auth/invalid-credential') {
+                errorMessage = 'Invalid email or password.';
+            } else if (err.code === 'auth/user-not-found') {
+                errorMessage = 'No account found with this email.';
+            } else if (err.code === 'auth/wrong-password') {
+                errorMessage = 'Incorrect password.';
+            } else if (err.code === 'auth/too-many-requests') {
+                errorMessage = 'Too many failed attempts. Try again later.';
+            }
+
+            Alert.alert('Login Error', errorMessage);
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <SafeAreaView style={tw`flex-1 bg-[#00686F]`}>
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={tw`flex-1`}>
-                <ScrollView contentContainerStyle={tw`flex-grow p-6`}>
-                    <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideUpAnim }] }}>
-                        <CustomText fontFamily="Poppins-SemiBold" style={tw`text-white text-3xl text-center mb-4`}>
-                            Create Account
-                        </CustomText>
-
-                        <TextInput placeholder="First Name*" value={firstname} onChangeText={setFirstname} style={tw`bg-gray-100 rounded-lg px-4 py-3 mb-3`} />
-                        <TextInput placeholder="Middle Name (Optional)" value={middlename} onChangeText={setMiddlename} style={tw`bg-gray-100 rounded-lg px-4 py-3 mb-3`} />
-                        <TextInput placeholder="Last Name*" value={lastname} onChangeText={setLastname} style={tw`bg-gray-100 rounded-lg px-4 py-3 mb-3`} />
-                        <TextInput placeholder="Username*" value={username} onChangeText={setUsername} style={tw`bg-gray-100 rounded-lg px-4 py-3 mb-3`} />
-                        <TextInput placeholder="Gmail*" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" style={tw`bg-gray-100 rounded-lg px-4 py-3 mb-3`} />
-
-                        <View style={tw`relative mb-4`}>
-                            <TextInput
-                                placeholder="Password*"
-                                value={password}
-                                onChangeText={setPassword}
-                                secureTextEntry={!showPassword}
-                                style={tw`bg-gray-100 rounded-lg px-4 py-3 text-black`}
-                            />
-                            <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={tw`absolute right-4 top-3`}>
-                                <Ionicons name={showPassword ? "eye-off" : "eye"} size={22} color="#6B7280" />
-                            </TouchableOpacity>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#EFF0EE' }} edges={['top', 'left', 'right']}>
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={{ flex: 1 }}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+            >
+                <ScrollView
+                    contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 20, paddingVertical: 24, justifyContent: 'center' }}
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                >
+                    <Animated.View
+                        style={{
+                            opacity: fadeAnim,
+                            transform: [{ translateY: slideUpAnim }],
+                        }}
+                    >
+                        {/* Compact Header */}
+                        <View style={{ marginBottom: 28, alignItems: 'center' }}>
+                            <CustomText style={{ fontSize: 28, fontWeight: 'bold', color: '#00686F', marginBottom: 4 }}>
+                                Welcome Back
+                            </CustomText>
+                            <CustomText style={{ fontSize: 14, color: '#6B7280', textAlign: 'center' }}>
+                                Sign in to continue
+                            </CustomText>
                         </View>
 
-                        <TouchableOpacity onPress={handleSignup} disabled={loading} style={tw`bg-[#00686F] py-3 rounded-lg mb-3 border border-white`}>
-                            {loading ? <ActivityIndicator color="#fff" /> : <CustomText style={tw`text-white text-center`}>Sign Up</CustomText>}
+                        {/* Email Input */}
+                        <View style={{ marginBottom: 14 }}>
+                            <CustomText style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 6 }}>
+                                Email
+                            </CustomText>
+                            <View
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    backgroundColor: '#FFFFFF',
+                                    borderRadius: 12,
+                                    paddingHorizontal: 14,
+                                    paddingVertical: 11,
+                                    borderWidth: 1.5,
+                                    borderColor: '#D1D5DB',
+                                }}
+                            >
+                                <Ionicons name="mail-outline" size={20} color="#00686F" />
+                                <TextInput
+                                    style={{ flex: 1, marginLeft: 10, fontSize: 15, color: '#111827' }}
+                                    placeholder="your@email.com"
+                                    placeholderTextColor="#9CA3AF"
+                                    value={email}
+                                    onChangeText={setEmail}
+                                    keyboardType="email-address"
+                                    autoCapitalize="none"
+                                    autoCorrect={false}
+                                    returnKeyType="next"
+                                />
+                            </View>
+                        </View>
+
+                        {/* Password Input */}
+                        <View style={{ marginBottom: 24 }}>
+                            <CustomText style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 6 }}>
+                                Password
+                            </CustomText>
+                            <View
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    backgroundColor: '#FFFFFF',
+                                    borderRadius: 12,
+                                    paddingHorizontal: 14,
+                                    paddingVertical: 11,
+                                    borderWidth: 1.5,
+                                    borderColor: '#D1D5DB',
+                                }}
+                            >
+                                <Ionicons name="lock-closed-outline" size={20} color="#00686F" />
+                                <TextInput
+                                    style={{ flex: 1, marginLeft: 10, fontSize: 15, color: '#111827' }}
+                                    placeholder="Enter password"
+                                    placeholderTextColor="#9CA3AF"
+                                    value={password}
+                                    onChangeText={setPassword}
+                                    secureTextEntry={!showPassword}
+                                    autoCapitalize="none"
+                                    returnKeyType="done"
+                                    onSubmitEditing={handleLogin}
+                                />
+                                <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                                    <Ionicons
+                                        name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                                        size={20}
+                                        color="#6B7280"
+                                    />
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+
+                        {/* Login Button */}
+                        <TouchableOpacity
+                            onPress={handleLogin}
+                            disabled={loading}
+                            style={{
+                                backgroundColor: '#00686F',
+                                borderRadius: 12,
+                                paddingVertical: 14,
+                                marginBottom: 16,
+                                shadowColor: '#00686F',
+                                shadowOffset: { width: 0, height: 3 },
+                                shadowOpacity: 0.25,
+                                shadowRadius: 6,
+                                elevation: 4,
+                            }}
+                            activeOpacity={0.85}
+                        >
+                            {loading ? (
+                                <ActivityIndicator color="#EFF0EE" size="small" />
+                            ) : (
+                                <CustomText style={{ color: '#EFF0EE', textAlign: 'center', fontSize: 16, fontWeight: 'bold' }}>
+                                    Sign In
+                                </CustomText>
+                            )}
                         </TouchableOpacity>
 
-                        <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-                            <CustomText style={tw`text-center text-gray-200 mt-2`}>
-                                Already have an account? <CustomText style={tw`font-bold text-white`}>Login</CustomText>
+                        {/* Divider */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 18 }}>
+                            <View style={{ flex: 1, height: 1, backgroundColor: '#D1D5DB' }} />
+                            <CustomText style={{ marginHorizontal: 12, color: '#9CA3AF', fontSize: 13 }}>OR</CustomText>
+                            <View style={{ flex: 1, height: 1, backgroundColor: '#D1D5DB' }} />
+                        </View>
+
+                        {/* Sign Up Link */}
+                        <TouchableOpacity
+                            onPress={() => navigation.navigate('Signup')}
+                            style={{ paddingVertical: 10 }}
+                        >
+                            <CustomText style={{ textAlign: 'center', fontSize: 14, color: '#6B7280' }}>
+                                Don't have an account?{' '}
+                                <CustomText style={{ color: '#00686F', fontWeight: 'bold' }}>
+                                    Sign Up
+                                </CustomText>
                             </CustomText>
                         </TouchableOpacity>
                     </Animated.View>

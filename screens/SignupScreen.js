@@ -1,4 +1,3 @@
-// screens/SignupScreen.js
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
@@ -7,17 +6,14 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
-  SafeAreaView,
   Animated,
   Easing,
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
-import tw from 'twrnc';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import CustomText from '../components/CustomText';
 import { Ionicons } from '@expo/vector-icons';
-
-// Firebase
 import { auth, db } from '../firebase';
 import {
   createUserWithEmailAndPassword,
@@ -26,22 +22,39 @@ import {
 } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
+// Move InputField OUTSIDE the main component
+const InputField = ({ label, icon, ...props }) => (
+  <View style={{ marginBottom: 12 }}>
+    <CustomText style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 6 }}>
+      {label}
+    </CustomText>
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        paddingHorizontal: 14,
+        paddingVertical: 11,
+        borderWidth: 1.5,
+        borderColor: '#D1D5DB',
+      }}
+    >
+      <Ionicons name={icon} size={20} color="#00686F" />
+      <TextInput
+        style={{ flex: 1, marginLeft: 10, fontSize: 15, color: '#111827' }}
+        placeholderTextColor="#9CA3AF"
+        {...props}
+      />
+    </View>
+  </View>
+);
+
 export default function SignupScreen({ navigation }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideUpAnim = useRef(new Animated.Value(30)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
 
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
-      Animated.timing(slideUpAnim, {
-        toValue: 0,
-        duration: 600,
-        easing: Easing.out(Easing.exp),
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
-
+  const [step, setStep] = useState(1);
   const [firstname, setFirstname] = useState('');
   const [middlename, setMiddlename] = useState('');
   const [lastname, setLastname] = useState('');
@@ -51,10 +64,41 @@ export default function SignupScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true
+    }).start();
+  }, []);
+
+  const animateStep = (direction) => {
+    Animated.sequence([
+      Animated.timing(slideAnim, {
+        toValue: direction === 'forward' ? -20 : 20,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const handleNext = () => {
+    if (!firstname.trim() || !lastname.trim() || !username.trim()) {
+      Alert.alert('Missing Fields', 'Please fill in all required fields.');
+      return;
+    }
+    animateStep('forward');
+    setStep(2);
+  };
+
   const handleSignup = async () => {
-    // 1. Validation Logic
-    if (!firstname.trim() || !lastname.trim() || !username.trim() || !email.trim() || !password) {
-      Alert.alert('Missing Fields', 'Please fill in all fields marked with *');
+    if (!email.trim() || !password) {
+      Alert.alert('Missing Fields', 'Please enter email and password.');
       return;
     }
 
@@ -69,11 +113,9 @@ export default function SignupScreen({ navigation }) {
     try {
       const cleanEmail = email.trim().toLowerCase();
 
-      // 2. Create User
       const userCredential = await createUserWithEmailAndPassword(auth, cleanEmail, password);
       const user = userCredential.user;
 
-      // 3. Write to Firestore while authenticated
       const userRef = doc(db, 'users', user.uid);
       await setDoc(userRef, {
         firstName: firstname.trim(),
@@ -85,61 +127,243 @@ export default function SignupScreen({ navigation }) {
         uid: user.uid,
       });
 
-      // 4. Verification Flow
       await sendEmailVerification(user);
-
-      // Sign out immediately so they must verify before logging in
       await signOut(auth);
 
       Alert.alert(
         'Verify Email',
-        'Account created! Please check your inbox and verify your email address before logging in.',
+        'Account created! Please check your inbox and verify your email before logging in.',
         [{ text: 'OK', onPress: () => navigation.replace('Login') }]
       );
-
     } catch (err) {
       console.error('Signup failed:', err);
-      Alert.alert('Signup Error', err.message);
+      let errorMessage = 'An error occurred. Please try again.';
+
+      if (err.code === 'auth/email-already-in-use') {
+        errorMessage = 'This email is already registered.';
+      } else if (err.code === 'auth/invalid-email') {
+        errorMessage = 'Invalid email format.';
+      }
+
+      Alert.alert('Signup Error', errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <SafeAreaView style={tw`flex-1 bg-[#00686F]`}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={tw`flex-1`}>
-        <ScrollView contentContainerStyle={tw`flex-grow p-6`}>
-          <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideUpAnim }] }}>
-            <CustomText fontFamily="Poppins-SemiBold" style={tw`text-white text-3xl text-center mb-4`}>
-              Create Account
-            </CustomText>
-
-            <TextInput placeholder="First Name*" value={firstname} onChangeText={setFirstname} style={tw`bg-gray-100 rounded-lg px-4 py-3 mb-3`} />
-            <TextInput placeholder="Middle Name (Optional)" value={middlename} onChangeText={setMiddlename} style={tw`bg-gray-100 rounded-lg px-4 py-3 mb-3`} />
-            <TextInput placeholder="Last Name*" value={lastname} onChangeText={setLastname} style={tw`bg-gray-100 rounded-lg px-4 py-3 mb-3`} />
-            <TextInput placeholder="Username*" value={username} onChangeText={setUsername} style={tw`bg-gray-100 rounded-lg px-4 py-3 mb-3`} />
-            <TextInput placeholder="Gmail*" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" style={tw`bg-gray-100 rounded-lg px-4 py-3 mb-3`} />
-
-            <View style={tw`relative mb-4`}>
-              <TextInput
-                placeholder="Password*"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                style={tw`bg-gray-100 rounded-lg px-4 py-3 text-black`}
-              />
-              <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={tw`absolute right-4 top-3`}>
-                <Ionicons name={showPassword ? "eye-off" : "eye"} size={22} color="#6B7280" />
-              </TouchableOpacity>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#EFF0EE' }} edges={['top', 'left', 'right']}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 20, paddingVertical: 24, justifyContent: 'center' }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <Animated.View
+            style={{
+              opacity: fadeAnim,
+              transform: [{ translateX: slideAnim }],
+            }}
+          >
+            {/* Header with Step Indicator */}
+            <View style={{ marginBottom: 24, alignItems: 'center' }}>
+              <CustomText style={{ fontSize: 28, fontWeight: 'bold', color: '#00686F', marginBottom: 4 }}>
+                Create Account
+              </CustomText>
+              <CustomText style={{ fontSize: 14, color: '#6B7280', marginBottom: 12 }}>
+                Step {step} of 2
+              </CustomText>
+              {/* Progress Bar */}
+              <View style={{ width: '100%', height: 4, backgroundColor: '#D1D5DB', borderRadius: 2, overflow: 'hidden' }}>
+                <View
+                  style={{
+                    width: step === 1 ? '50%' : '100%',
+                    height: '100%',
+                    backgroundColor: '#00686F',
+                  }}
+                />
+              </View>
             </View>
 
-            <TouchableOpacity onPress={handleSignup} disabled={loading} style={tw`bg-[#00686F] py-3 rounded-lg mb-3 border border-white`}>
-              {loading ? <ActivityIndicator color="#fff" /> : <CustomText style={tw`text-white text-center`}>Sign Up</CustomText>}
-            </TouchableOpacity>
+            {/* Step 1: Personal Info */}
+            {step === 1 && (
+              <>
+                <InputField
+                  label="First Name *"
+                  icon="person-outline"
+                  placeholder="John"
+                  value={firstname}
+                  onChangeText={setFirstname}
+                  returnKeyType="next"
+                />
 
-            <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-              <CustomText style={tw`text-center text-gray-200 mt-2`}>
-                Already have an account? <CustomText style={tw`font-bold text-white`}>Login</CustomText>
+                <InputField
+                  label="Middle Name"
+                  icon="person-outline"
+                  placeholder="Optional"
+                  value={middlename}
+                  onChangeText={setMiddlename}
+                  returnKeyType="next"
+                />
+
+                <InputField
+                  label="Last Name *"
+                  icon="person-outline"
+                  placeholder="Doe"
+                  value={lastname}
+                  onChangeText={setLastname}
+                  returnKeyType="next"
+                />
+
+                <InputField
+                  label="Username *"
+                  icon="at-outline"
+                  placeholder="johndoe"
+                  value={username}
+                  onChangeText={setUsername}
+                  autoCapitalize="none"
+                  returnKeyType="done"
+                  onSubmitEditing={handleNext}
+                />
+
+                <TouchableOpacity
+                  onPress={handleNext}
+                  style={{
+                    backgroundColor: '#00686F',
+                    borderRadius: 12,
+                    paddingVertical: 14,
+                    marginTop: 8,
+                    shadowColor: '#00686F',
+                    shadowOffset: { width: 0, height: 3 },
+                    shadowOpacity: 0.25,
+                    shadowRadius: 6,
+                    elevation: 4,
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <CustomText style={{ color: '#EFF0EE', textAlign: 'center', fontSize: 16, fontWeight: 'bold' }}>
+                    Next
+                  </CustomText>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {/* Step 2: Account Info */}
+            {step === 2 && (
+              <>
+                <InputField
+                  label="Email *"
+                  icon="mail-outline"
+                  placeholder="your@email.com"
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="next"
+                />
+
+                <View style={{ marginBottom: 20 }}>
+                  <CustomText style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 6 }}>
+                    Password *
+                  </CustomText>
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      backgroundColor: '#FFFFFF',
+                      borderRadius: 12,
+                      paddingHorizontal: 14,
+                      paddingVertical: 11,
+                      borderWidth: 1.5,
+                      borderColor: '#D1D5DB',
+                    }}
+                  >
+                    <Ionicons name="lock-closed-outline" size={20} color="#00686F" />
+                    <TextInput
+                      style={{ flex: 1, marginLeft: 10, fontSize: 15, color: '#111827' }}
+                      placeholder="6+ characters"
+                      placeholderTextColor="#9CA3AF"
+                      value={password}
+                      onChangeText={setPassword}
+                      secureTextEntry={!showPassword}
+                      autoCapitalize="none"
+                      returnKeyType="done"
+                      onSubmitEditing={handleSignup}
+                    />
+                    <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                      <Ionicons
+                        name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                        size={20}
+                        color="#6B7280"
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      animateStep('back');
+                      setStep(1);
+                    }}
+                    style={{
+                      flex: 1,
+                      backgroundColor: '#FFFFFF',
+                      borderRadius: 12,
+                      paddingVertical: 14,
+                      borderWidth: 1.5,
+                      borderColor: '#00686F',
+                    }}
+                    activeOpacity={0.85}
+                  >
+                    <CustomText style={{ color: '#00686F', textAlign: 'center', fontSize: 16, fontWeight: 'bold' }}>
+                      Back
+                    </CustomText>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={handleSignup}
+                    disabled={loading}
+                    style={{
+                      flex: 1,
+                      backgroundColor: '#00686F',
+                      borderRadius: 12,
+                      paddingVertical: 14,
+                      shadowColor: '#00686F',
+                      shadowOffset: { width: 0, height: 3 },
+                      shadowOpacity: 0.25,
+                      shadowRadius: 6,
+                      elevation: 4,
+                    }}
+                    activeOpacity={0.85}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#EFF0EE" size="small" />
+                    ) : (
+                      <CustomText style={{ color: '#EFF0EE', textAlign: 'center', fontSize: 16, fontWeight: 'bold' }}>
+                        Sign Up
+                      </CustomText>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+
+            {/* Login Link */}
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Login')}
+              style={{ paddingVertical: 16, marginTop: 8 }}
+            >
+              <CustomText style={{ textAlign: 'center', fontSize: 14, color: '#6B7280' }}>
+                Already have an account?{' '}
+                <CustomText style={{ color: '#00686F', fontWeight: 'bold' }}>
+                  Sign In
+                </CustomText>
               </CustomText>
             </TouchableOpacity>
           </Animated.View>

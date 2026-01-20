@@ -1,117 +1,375 @@
-// screens/DashboardScreen.js
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
-    SafeAreaView,
-    TouchableOpacity,
-    ActivityIndicator,
-    Alert,
     ScrollView,
+    TouchableOpacity,
+    RefreshControl,
+    Dimensions,
+    Alert,
 } from 'react-native';
-import tw from 'twrnc';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import CustomText from '../components/CustomText';
-
-// Firebase
+import DashboardHeader from '../components/Header';
+import { Ionicons } from '@expo/vector-icons';
 import { auth, db } from '../firebase';
-import { signOut } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
+
+const { width } = Dimensions.get('window');
 
 export default function DashboardScreen({ navigation }) {
     const [userData, setUserData] = useState(null);
-    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+    const [greeting, setGreeting] = useState('');
 
     useEffect(() => {
         fetchUserData();
+        setGreetingMessage();
     }, []);
+
+    const setGreetingMessage = () => {
+        const hour = new Date().getHours();
+        if (hour < 12) setGreeting('Good Morning');
+        else if (hour < 18) setGreeting('Good Afternoon');
+        else setGreeting('Good Evening');
+    };
 
     const fetchUserData = async () => {
         try {
             const user = auth.currentUser;
             if (user) {
-                // Fetch the document from 'users' collection using the UID
-                const docRef = doc(db, 'users', user.uid);
-                const docSnap = await getDoc(docRef);
-
-                if (docSnap.exists()) {
-                    setUserData(docSnap.data());
-                } else {
-                    console.log("No such document!");
+                const userDoc = await getDoc(doc(db, 'users', user.uid));
+                if (userDoc.exists()) {
+                    setUserData(userDoc.data());
                 }
             }
         } catch (error) {
-            console.error("Error fetching user data:", error);
-            Alert.alert("Error", "Could not load profile data.");
-        } finally {
-            setLoading(false);
+            console.error('Error fetching user data:', error);
         }
     };
 
-    const handleLogout = async () => {
-        try {
-            await signOut(auth);
-            navigation.replace('Login');
-        } catch (error) {
-            Alert.alert("Logout Error", error.message);
-        }
+    const onRefresh = async () => {
+        setRefreshing(true);
+        await fetchUserData();
+        setRefreshing(false);
     };
 
-    if (loading) {
-        return (
-            <View style={tw`flex-1 justify-center items-center bg-[#00686F]`}>
-                <ActivityIndicator size="large" color="#ffffff" />
-            </View>
-        );
-    }
+    // Feature Cards Data
+    const features = [
+        {
+            id: 1,
+            title: 'AR Venue Tour',
+            description: 'Virtual venue visits with augmented reality',
+            icon: 'cube-outline',
+            color: '#00686F',
+            screen: 'ARVenue',
+        },
+        {
+            id: 2,
+            title: 'Weather Forecast',
+            description: 'Smart weather predictions for your event',
+            icon: 'partly-sunny-outline',
+            color: '#0891B2',
+            screen: 'Weather',
+        },
+        {
+            id: 3,
+            title: 'RSVP Tracking',
+            description: 'Manage guest responses efficiently',
+            icon: 'people-outline',
+            color: '#059669',
+            screen: 'RSVP',
+        },
+        {
+            id: 4,
+            title: 'Event Planner',
+            description: 'Create and organize your events',
+            icon: 'calendar-outline',
+            color: '#DC2626',
+            screen: 'EventPlanner',
+        },
+    ];
+
+    // Quick Actions Data
+    const quickActions = [
+        {
+            id: 1,
+            title: 'Create Event',
+            icon: 'add-circle-outline',
+            color: '#00686F',
+        },
+        {
+            id: 2,
+            title: 'My Events',
+            icon: 'list-outline',
+            color: '#0891B2',
+        },
+        {
+            id: 3,
+            title: 'Venues',
+            icon: 'business-outline',
+            color: '#059669',
+        },
+        {
+            id: 4,
+            title: 'Budget',
+            icon: 'wallet-outline',
+            color: '#F59E0B',
+        },
+    ];
+
+    // Stats Data
+    const stats = [
+        { label: 'Total Events', value: '0', icon: 'calendar', color: '#00686F' },
+        { label: 'Upcoming', value: '0', icon: 'time', color: '#0891B2' },
+        { label: 'Guests', value: '0', icon: 'people', color: '#059669' },
+        { label: 'Budget', value: '₱0', icon: 'cash', color: '#F59E0B' },
+    ];
 
     return (
-        <SafeAreaView style={tw`flex-1 bg-gray-50`}>
-            <ScrollView contentContainerStyle={tw`p-6`}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#EFF0EE' }} edges={['top']}>
+            <ScrollView
+                showsVerticalScrollIndicator={false}
+                refreshControl={
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#00686F" />
+                }
+            >
+                {/* Separated Header Component */}
+                <DashboardHeader userData={userData} greeting={greeting} navigation={navigation} />
 
-                {/* Header Section */}
-                <View style={tw`mb-8 mt-4`}>
-                    <CustomText fontFamily="Poppins-SemiBold" style={tw`text-[#00686F] text-3xl`}>
-                        Dashboard
-                    </CustomText>
-                    <CustomText style={tw`text-gray-500 text-lg`}>
-                        Welcome back, {userData?.firstName || 'User'}!
-                    </CustomText>
+                {/* Stats Section */}
+                <View style={{ paddingHorizontal: 20, marginTop: -20 }}>
+                    <View
+                        style={{
+                            backgroundColor: '#FFFFFF',
+                            borderRadius: 16,
+                            padding: 16,
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.1,
+                            shadowRadius: 8,
+                            elevation: 3,
+                        }}
+                    >
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                            {stats.map((stat, index) => (
+                                <View
+                                    key={stat.label}
+                                    style={{
+                                        width: '50%',
+                                        paddingVertical: 12,
+                                        paddingHorizontal: 8,
+                                        borderRightWidth: index % 2 === 0 ? 1 : 0,
+                                        borderBottomWidth: index < 2 ? 1 : 0,
+                                        borderColor: '#E5E7EB',
+                                    }}
+                                >
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                                        <View
+                                            style={{
+                                                width: 32,
+                                                height: 32,
+                                                borderRadius: 8,
+                                                backgroundColor: `${stat.color}15`,
+                                                justifyContent: 'center',
+                                                alignItems: 'center',
+                                                marginRight: 8,
+                                            }}
+                                        >
+                                            <Ionicons name={stat.icon} size={18} color={stat.color} />
+                                        </View>
+                                        <CustomText style={{ fontSize: 12, color: '#6B7280' }}>
+                                            {stat.label}
+                                        </CustomText>
+                                    </View>
+                                    <CustomText style={{ fontSize: 20, fontWeight: 'bold', color: '#111827', marginLeft: 40 }}>
+                                        {stat.value}
+                                    </CustomText>
+                                </View>
+                            ))}
+                        </View>
+                    </View>
                 </View>
 
-                {/* Profile Card */}
-                <View style={tw`bg-white p-6 rounded-3xl shadow-sm border border-gray-100 mb-6`}>
-                    <CustomText style={tw`text-gray-400 uppercase text-xs mb-4 font-bold`}>
-                        Profile Details
+                {/* Quick Actions */}
+                <View style={{ paddingHorizontal: 20, marginTop: 24 }}>
+                    <CustomText style={{ fontSize: 18, fontWeight: 'bold', color: '#111827', marginBottom: 12 }}>
+                        Quick Actions
                     </CustomText>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+                        {quickActions.map((action) => (
+                            <TouchableOpacity
+                                key={action.id}
+                                style={{
+                                    width: (width - 52) / 2,
+                                    backgroundColor: '#FFFFFF',
+                                    borderRadius: 12,
+                                    padding: 16,
+                                    shadowColor: '#000',
+                                    shadowOffset: { width: 0, height: 1 },
+                                    shadowOpacity: 0.05,
+                                    shadowRadius: 4,
+                                    elevation: 2,
+                                }}
+                                activeOpacity={0.7}
+                                onPress={() => Alert.alert(action.title, 'Feature coming soon!')}
+                            >
+                                <View
+                                    style={{
+                                        width: 48,
+                                        height: 48,
+                                        borderRadius: 12,
+                                        backgroundColor: `${action.color}15`,
+                                        justifyContent: 'center',
+                                        alignItems: 'center',
+                                        marginBottom: 10,
+                                    }}
+                                >
+                                    <Ionicons name={action.icon} size={24} color={action.color} />
+                                </View>
+                                <CustomText style={{ fontSize: 14, fontWeight: '600', color: '#111827' }}>
+                                    {action.title}
+                                </CustomText>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                </View>
 
-                    <View style={tw`mb-4`}>
-                        <CustomText style={tw`text-gray-500 text-sm`}>Full Name</CustomText>
-                        <CustomText style={tw`text-black text-lg`}>
-                            {userData?.firstName} {userData?.middleName ? `${userData.middleName} ` : ''}{userData?.lastName}
+                {/* Main Features */}
+                <View style={{ paddingHorizontal: 20, marginTop: 24 }}>
+                    <CustomText style={{ fontSize: 18, fontWeight: 'bold', color: '#111827', marginBottom: 12 }}>
+                        Features
+                    </CustomText>
+                    {features.map((feature) => (
+                        <TouchableOpacity
+                            key={feature.id}
+                            style={{
+                                backgroundColor: '#FFFFFF',
+                                borderRadius: 12,
+                                padding: 16,
+                                marginBottom: 12,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                shadowColor: '#000',
+                                shadowOffset: { width: 0, height: 1 },
+                                shadowOpacity: 0.05,
+                                shadowRadius: 4,
+                                elevation: 2,
+                            }}
+                            activeOpacity={0.7}
+                            onPress={() => Alert.alert(feature.title, 'Feature coming soon!')}
+                        >
+                            <View
+                                style={{
+                                    width: 56,
+                                    height: 56,
+                                    borderRadius: 14,
+                                    backgroundColor: `${feature.color}15`,
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                    marginRight: 14,
+                                }}
+                            >
+                                <Ionicons name={feature.icon} size={28} color={feature.color} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <CustomText style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginBottom: 4 }}>
+                                    {feature.title}
+                                </CustomText>
+                                <CustomText style={{ fontSize: 13, color: '#6B7280', lineHeight: 18 }}>
+                                    {feature.description}
+                                </CustomText>
+                            </View>
+                            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+                        </TouchableOpacity>
+                    ))}
+                </View>
+
+                {/* Upcoming Events Section */}
+                <View style={{ paddingHorizontal: 20, marginTop: 24, marginBottom: 32 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                        <CustomText style={{ fontSize: 18, fontWeight: 'bold', color: '#111827' }}>
+                            Upcoming Events
                         </CustomText>
+                        <TouchableOpacity>
+                            <CustomText style={{ fontSize: 14, color: '#00686F', fontWeight: '600' }}>
+                                See All
+                            </CustomText>
+                        </TouchableOpacity>
                     </View>
 
-                    <View style={tw`mb-4`}>
-                        <CustomText style={tw`text-gray-500 text-sm`}>Username</CustomText>
-                        <CustomText style={tw`text-black text-lg`}>@{userData?.username}</CustomText>
-                    </View>
-
-                    <View>
-                        <CustomText style={tw`text-gray-500 text-sm`}>Email</CustomText>
-                        <CustomText style={tw`text-black text-lg`}>{userData?.email}</CustomText>
+                    {/* Empty State */}
+                    <View
+                        style={{
+                            backgroundColor: '#FFFFFF',
+                            borderRadius: 12,
+                            padding: 32,
+                            alignItems: 'center',
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 1 },
+                            shadowOpacity: 0.05,
+                            shadowRadius: 4,
+                            elevation: 2,
+                        }}
+                    >
+                        <View
+                            style={{
+                                width: 80,
+                                height: 80,
+                                borderRadius: 40,
+                                backgroundColor: '#F3F4F6',
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                marginBottom: 16,
+                            }}
+                        >
+                            <Ionicons name="calendar-outline" size={40} color="#9CA3AF" />
+                        </View>
+                        <CustomText style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginBottom: 8 }}>
+                            No Upcoming Events
+                        </CustomText>
+                        <CustomText style={{ fontSize: 14, color: '#6B7280', textAlign: 'center', marginBottom: 20 }}>
+                            Start planning your first event and bring your vision to life!
+                        </CustomText>
+                        <TouchableOpacity
+                            style={{
+                                backgroundColor: '#00686F',
+                                paddingHorizontal: 24,
+                                paddingVertical: 12,
+                                borderRadius: 10,
+                            }}
+                            onPress={() => Alert.alert('Create Event', 'Feature coming soon!')}
+                        >
+                            <CustomText style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '600' }}>
+                                Create Your First Event
+                            </CustomText>
+                        </TouchableOpacity>
                     </View>
                 </View>
-
-                {/* Logout Button */}
-                <TouchableOpacity
-                    onPress={handleLogout}
-                    style={tw`bg-red-50 py-4 rounded-2xl border border-red-100`}
-                >
-                    <CustomText style={tw`text-red-600 text-center font-bold text-lg`}>
-                        Log Out
-                    </CustomText>
-                </TouchableOpacity>
-
             </ScrollView>
+
+            {/* Floating Action Button */}
+            <TouchableOpacity
+                style={{
+                    position: 'absolute',
+                    bottom: 24,
+                    right: 24,
+                    width: 60,
+                    height: 60,
+                    borderRadius: 30,
+                    backgroundColor: '#00686F',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    shadowColor: '#00686F',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 8,
+                    elevation: 6,
+                }}
+                onPress={() => Alert.alert('Create Event', 'Feature coming soon!')}
+                activeOpacity={0.85}
+            >
+                <Ionicons name="add" size={32} color="#FFFFFF" />
+            </TouchableOpacity>
         </SafeAreaView>
     );
 }

@@ -1,10 +1,7 @@
-// App.js
 import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ActivityIndicator, View } from 'react-native';
-
-// Firebase
 import { auth } from './firebase';
 import { onAuthStateChanged, reload } from 'firebase/auth';
 
@@ -24,7 +21,6 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         await reload(user);
-
         if (user.emailVerified) {
           setInitialRoute('Dashboard');
         } else {
@@ -33,17 +29,15 @@ export default function App() {
       } else {
         setInitialRoute('Landing');
       }
-
       setLoading(false);
     });
-
     return unsubscribe;
   }, []);
 
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#00686F" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f172a' }}>
+        <ActivityIndicator size="large" color="#3b82f6" />
       </View>
     );
   }
@@ -52,7 +46,10 @@ export default function App() {
     <NavigationContainer>
       <Stack.Navigator
         initialRouteName={initialRoute}
-        screenOptions={{ headerShown: false }}
+        screenOptions={{
+          headerShown: false,
+          animation: 'slide_from_right',
+        }}
       >
         <Stack.Screen name="Landing" component={LandingScreen} />
         <Stack.Screen name="Login" component={LoginScreen} />
