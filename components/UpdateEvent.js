@@ -12,28 +12,32 @@ import {
     KeyboardAvoidingView
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import CustomText from './CustomText';
+import CustomText from '../components/CustomText';
 import { Ionicons } from '@expo/vector-icons';
-import { db, auth } from '../firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../firebase';
+import { doc, updateDoc } from 'firebase/firestore';
 import { Picker } from '@react-native-picker/picker'; 
 import DateTimePicker from '@react-native-community/datetimepicker';
 
-export default function AddEvent({ navigation }) {
-    const [title, setTitle] = useState('');
-    const [eventType, setEventType] = useState('');
+export default function UpdateEvent({ navigation, route }) {
+    const { eventId, eventData } = route.params;
+
+    // Form States
+    const [title, setTitle] = useState(eventData?.title || '');
+    const [eventType, setEventType] = useState(eventData?.eventType || '');
     const [otherType, setOtherType] = useState('');
+    const [location, setLocation] = useState(eventData?.location || '');
+    const [description, setDescription] = useState(eventData?.description || '');
+    const [isMultiDay, setIsMultiDay] = useState(eventData?.isMultiDay || false);
     
-    const [startDate, setStartDate] = useState(new Date());
+    // Date Management - Initialize with existing data
+    const [startDate, setStartDate] = useState(new Date()); 
     const [endDate, setEndDate] = useState(new Date());
-    const [isMultiDay, setIsMultiDay] = useState(false);
+    const [startDateText, setStartDateText] = useState(eventData?.startDate || '');
+    const [endDateText, setEndDateText] = useState(eventData?.endDate || '');
+
     const [showStartPicker, setShowStartPicker] = useState(false);
     const [showEndPicker, setShowEndPicker] = useState(false);
-    const [startDateText, setStartDateText] = useState('');
-    const [endDateText, setEndDateText] = useState('');
-
-    const [location, setLocation] = useState('');
-    const [description, setDescription] = useState('');
     const [loading, setLoading] = useState(false);
 
     const eventTypes = ['Wedding', 'Birthday Party', 'Corporate', 'Charity', 'Others'];
@@ -44,47 +48,47 @@ export default function AddEvent({ navigation }) {
         });
     };
 
+    // Fix: Added missing Date Change Handlers
     const onStartChange = (event, selectedDate) => {
-        const currentDate = selectedDate || startDate;
-        setShowStartPicker(Platform.OS === 'ios');
-        setStartDate(currentDate);
-        setStartDateText(formatDate(currentDate));
-        if (currentDate > endDate) {
-            setEndDate(currentDate);
-            setEndDateText(formatDate(currentDate));
+        setShowStartPicker(false);
+        if (selectedDate) {
+            setStartDate(selectedDate);
+            setStartDateText(formatDate(selectedDate));
         }
     };
 
     const onEndChange = (event, selectedDate) => {
-        const currentDate = selectedDate || endDate;
-        setShowEndPicker(Platform.OS === 'ios');
-        setEndDate(currentDate);
-        setEndDateText(formatDate(currentDate));
+        setShowEndPicker(false);
+        if (selectedDate) {
+            setEndDate(selectedDate);
+            setEndDateText(formatDate(selectedDate));
+        }
     };
 
-    const handleCreateEvent = async () => {
-        const finalEventType = eventType === 'Others' ? otherType : eventType;
-        if (!title || !finalEventType || !startDateText) {
-            Alert.alert('Missing Info', 'Please fill in the required fields (*)');
+    const handleUpdateEvent = async () => {
+        const finalType = eventType === 'Others' ? otherType : eventType;
+        if (!title || !finalType || !startDateText) {
+            Alert.alert('Missing Info', 'Please fill in required fields');
             return;
         }
 
         setLoading(true);
         try {
-            await addDoc(collection(db, 'events'), {
-                userId: auth.currentUser.uid,
+            const eventRef = doc(db, 'events', eventId);
+            await updateDoc(eventRef, {
                 title,
-                eventType: finalEventType,
+                eventType: finalType,
                 startDate: startDateText,
                 endDate: isMultiDay ? endDateText : null,
                 isMultiDay,
                 location: location || 'To be decided',
                 description,
-                createdAt: serverTimestamp(),
+                updatedAt: new Date()
             });
-            Alert.alert('Success ✨', 'Your event has been listed!', [{ text: 'Awesome', onPress: () => navigation.goBack() }]);
+            Alert.alert('Success ✨', 'Changes saved!', [{ text: 'OK', onPress: () => navigation.goBack() }]);
         } catch (error) {
             Alert.alert('Error', 'Something went wrong. Please try again.');
+            console.error(error);
         } finally {
             setLoading(false);
         }
@@ -93,21 +97,17 @@ export default function AddEvent({ navigation }) {
     return (
         <SafeAreaView style={styles.safeArea}>
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{flex: 1}}>
-                {/* Header */}
                 <View style={styles.header}>
                     <TouchableOpacity onPress={() => navigation.goBack()} style={styles.roundButton}>
                         <Ionicons name="chevron-back" size={24} color="#111827" />
                     </TouchableOpacity>
-                    <CustomText style={styles.headerTitle}>New Event</CustomText>
+                    <CustomText style={styles.headerTitle}>Edit Event</CustomText>
                     <View style={{ width: 40 }} />
                 </View>
 
                 <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContainer}>
-                    
-                    {/* Basic Info Card */}
                     <View style={styles.card}>
                         <CustomText style={styles.cardTitle}>Basic Details</CustomText>
-                        
                         <View style={styles.inputWrapper}>
                             <CustomText style={styles.label}>Event Name *</CustomText>
                             <TextInput
@@ -115,7 +115,6 @@ export default function AddEvent({ navigation }) {
                                 value={title}
                                 onChangeText={setTitle}
                                 placeholder="What's the occasion?"
-                                placeholderTextColor="#9CA3AF"
                             />
                         </View>
 
@@ -140,10 +139,8 @@ export default function AddEvent({ navigation }) {
                         )}
                     </View>
 
-                    {/* Date & Time Card */}
                     <View style={styles.card}>
                         <CustomText style={styles.cardTitle}>Date & Schedule</CustomText>
-                        
                         <View style={styles.inputWrapper}>
                             <CustomText style={styles.label}>Start Date *</CustomText>
                             <TouchableOpacity style={styles.dateSelector} onPress={() => setShowStartPicker(true)}>
@@ -176,10 +173,8 @@ export default function AddEvent({ navigation }) {
                         )}
                     </View>
 
-                    {/* Location & Extras Card */}
                     <View style={styles.card}>
                         <CustomText style={styles.cardTitle}>Location & Notes</CustomText>
-                        
                         <View style={styles.inputWrapper}>
                             <CustomText style={styles.label}>Venue Location</CustomText>
                             <View style={styles.locationBox}>
@@ -190,9 +185,6 @@ export default function AddEvent({ navigation }) {
                                     onChangeText={setLocation} 
                                     placeholder="Search or pin venue" 
                                 />
-                                <TouchableOpacity style={styles.arButton}>
-                                    <Ionicons name="scan" size={20} color="#FFF" />
-                                </TouchableOpacity>
                             </View>
                         </View>
 
@@ -203,25 +195,24 @@ export default function AddEvent({ navigation }) {
                                 value={description} 
                                 onChangeText={setDescription} 
                                 multiline 
-                                placeholder="Add any extra details for your guests..." 
+                                placeholder="Add any extra details..." 
                             />
                         </View>
                     </View>
 
                     <TouchableOpacity 
                         style={[styles.submitButton, loading && styles.disabledButton]} 
-                        onPress={handleCreateEvent} 
+                        onPress={handleUpdateEvent} // Fixed function name
                         disabled={loading}
                     >
-                        {loading ? <ActivityIndicator color="#FFF" /> : <CustomText style={styles.submitButtonText}>Create Event</CustomText>}
+                        {loading ? <ActivityIndicator color="#FFF" /> : <CustomText style={styles.submitButtonText}>Update Event</CustomText>}
                     </TouchableOpacity>
 
-                    {/* Spacing for bottom */}
                     <View style={{ height: 40 }} />
                 </ScrollView>
             </KeyboardAvoidingView>
 
-            {showStartPicker && <DateTimePicker value={startDate} mode="date" display="default" onChange={onStartChange} minimumDate={new Date()} />}
+            {showStartPicker && <DateTimePicker value={startDate} mode="date" display="default" onChange={onStartChange} />}
             {showEndPicker && <DateTimePicker value={endDate} mode="date" display="default" onChange={onEndChange} minimumDate={startDate} />}
         </SafeAreaView>
     );
@@ -229,94 +220,25 @@ export default function AddEvent({ navigation }) {
 
 const styles = StyleSheet.create({
     safeArea: { flex: 1, backgroundColor: '#F3F4F6' },
-    header: { 
-        flexDirection: 'row', 
-        alignItems: 'center', 
-        justifyContent: 'space-between', 
-        paddingHorizontal: 16, 
-        paddingVertical: 12, 
-        backgroundColor: '#FFF',
-        borderBottomWidth: 1,
-        borderBottomColor: '#E5E7EB'
-    },
+    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
     roundButton: { padding: 8, borderRadius: 20, backgroundColor: '#F9FAFB' },
     headerTitle: { fontSize: 20, fontWeight: '800', color: '#111827' },
     scrollContainer: { padding: 16 },
-    
-    // Card Style
-    card: { 
-        backgroundColor: '#FFF', 
-        borderRadius: 16, 
-        padding: 16, 
-        marginBottom: 20,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 10,
-        elevation: 3 
-    },
+    card: { backgroundColor: '#FFF', borderRadius: 16, padding: 16, marginBottom: 20, elevation: 3 },
     cardTitle: { fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 16 },
-    
     inputWrapper: { marginBottom: 16 },
-    label: { fontSize: 13, color: '#6B7280', marginBottom: 6, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
-    input: { 
-        backgroundColor: '#F9FAFB', 
-        padding: 14, 
-        borderRadius: 12, 
-        borderWidth: 1, 
-        borderColor: '#E5E7EB', 
-        fontSize: 16, 
-        color: '#111827' 
-    },
+    label: { fontSize: 13, color: '#6B7280', marginBottom: 6, fontWeight: '600', textTransform: 'uppercase' },
+    input: { backgroundColor: '#F9FAFB', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB', fontSize: 16, color: '#111827' },
     pickerContainer: { backgroundColor: '#F9FAFB', borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB', overflow: 'hidden' },
     picker: { height: 50 },
-    
-    // Date Selector
-    dateSelector: { 
-        flexDirection: 'row', 
-        alignItems: 'center', 
-        backgroundColor: '#F9FAFB', 
-        padding: 14, 
-        borderRadius: 12, 
-        borderWidth: 1, 
-        borderColor: '#E5E7EB' 
-    },
+    dateSelector: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F9FAFB', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB' },
     dateValue: { marginLeft: 10, fontSize: 16, color: '#111827' },
-    
-    inlineSwitchRow: { 
-        flexDirection: 'row', 
-        alignItems: 'center', 
-        justifyContent: 'space-between',
-        paddingVertical: 10,
-        marginBottom: 10
-    },
+    inlineSwitchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, marginBottom: 10 },
     switchLabel: { fontSize: 15, color: '#374151', fontWeight: '500' },
-    
-    // Location Box
-    locationBox: { 
-        flexDirection: 'row', 
-        alignItems: 'center', 
-        backgroundColor: '#F9FAFB', 
-        borderWidth: 1, 
-        borderColor: '#E5E7EB', 
-        borderRadius: 12, 
-        paddingLeft: 12 
-    },
+    locationBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, paddingLeft: 12 },
     locationInput: { flex: 1, paddingVertical: 14, paddingHorizontal: 8, fontSize: 16 },
-    arButton: { backgroundColor: '#00686F', padding: 10, borderRadius: 10, marginRight: 4 },
-    
     textArea: { height: 100, textAlignVertical: 'top' },
-    submitButton: { 
-        backgroundColor: '#00686F', 
-        paddingVertical: 18, 
-        borderRadius: 16, 
-        alignItems: 'center',
-        shadowColor: '#00686F',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 5
-    },
+    submitButton: { backgroundColor: '#00686F', paddingVertical: 18, borderRadius: 16, alignItems: 'center' },
     disabledButton: { opacity: 0.6 },
     submitButtonText: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
 });
