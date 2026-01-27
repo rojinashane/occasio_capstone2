@@ -8,15 +8,16 @@ import {
     Alert,
     ActivityIndicator,
     StyleSheet,
-    Modal, // Added for Past Events component
-    FlatList // Added for Past Events component
+    Modal,
+    FlatList
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import CustomText from '../components/CustomText';
 import DashboardHeader from '../components/Header';
 import { Ionicons } from '@expo/vector-icons';
 import { auth, db } from '../firebase';
-import { doc, getDoc, collection, query, where, onSnapshot, deleteDoc } from 'firebase/firestore';
+// Added 'or' from firestore for the combined query
+import { doc, getDoc, collection, query, where, onSnapshot, deleteDoc, or } from 'firebase/firestore';
 
 const { width, height } = Dimensions.get('window');
 
@@ -24,8 +25,8 @@ export default function DashboardScreen({ navigation }) {
     const [userData, setUserData] = useState(null);
     const [upcomingEvents, setUpcomingEvents] = useState([]);
     const [liveEvents, setLiveEvents] = useState([]); 
-    const [pastEvents, setPastEvents] = useState([]); // Bucket for past events
-    const [showPastModal, setShowPastModal] = useState(false); // Modal visibility
+    const [pastEvents, setPastEvents] = useState([]);
+    const [showPastModal, setShowPastModal] = useState(false);
     const [totalCount, setTotalCount] = useState(0);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -37,7 +38,15 @@ export default function DashboardScreen({ navigation }) {
 
         const user = auth.currentUser;
         if (user) {
-            const q = query(collection(db, 'events'), where('userId', '==', user.uid));
+            // --- UPDATED QUERY ---
+            // This now fetches events where you are the owner OR your email is in the collaborators list
+            const q = query(
+                collection(db, 'events'), 
+                or(
+                    where('userId', '==', user.uid),
+                    where('collaborators', 'array-contains', user.email.toLowerCase())
+                )
+            );
 
             const unsubscribe = onSnapshot(q, (snapshot) => {
                 const now = new Date();
@@ -54,7 +63,7 @@ export default function DashboardScreen({ navigation }) {
 
                 const live = [];
                 const future = [];
-                const past = []; // Capture past events here
+                const past = [];
 
                 allData.forEach(event => {
                     const eventTime = parseCustomDate(event.startDate || event.date);
@@ -63,7 +72,7 @@ export default function DashboardScreen({ navigation }) {
                     if (!eventTime || isNaN(eventTime)) return;
 
                     if (endTime < today) {
-                        past.push(event); // Fill the past bucket
+                        past.push(event);
                     } else if (eventTime <= today && endTime >= today) {
                         live.push(event);
                     } else if (eventTime > today && eventTime <= threeMonthsLimit) {
@@ -75,6 +84,9 @@ export default function DashboardScreen({ navigation }) {
                 setLiveEvents(live.sort(sortByDate));
                 setUpcomingEvents(future.sort(sortByDate));
                 setPastEvents(past.sort((a, b) => parseCustomDate(b.startDate) - parseCustomDate(a.startDate)));
+                setLoading(false);
+            }, (error) => {
+                console.error("Snapshot Error:", error);
                 setLoading(false);
             });
 
@@ -89,7 +101,10 @@ export default function DashboardScreen({ navigation }) {
             const monthMap = { jan:0, feb:1, mar:2, apr:3, may:4, jun:5, jul:6, aug:7, sep:8, oct:9, nov:10, dec:11 };
             const parts = dateVal.replace(',', '').split(' ');
             if (parts.length === 3) {
-                return new Date(parts[2], monthMap[parts[0].toLowerCase().substring(0,3)], parts[1]).setHours(0,0,0,0);
+                const month = monthMap[parts[0].toLowerCase().substring(0,3)];
+                if (month !== undefined) {
+                    return new Date(parts[2], month, parts[1]).setHours(0,0,0,0);
+                }
             }
         }
         return new Date(dateVal).setHours(0,0,0,0);
@@ -102,12 +117,26 @@ export default function DashboardScreen({ navigation }) {
         return `${start.split(',')[0]} - ${endParts[0]}, ${endParts[1]}`;
     };
 
-    // Function to delete event from the Past Events Modal
     const deleteEvent = async (eventId) => {
-        Alert.alert("Delete Event", "Are you sure you want to remove this record?", [
+        // Find the event to check ownership
+        const eventToDelete = pastEvents.find(e => e.id === eventId);
+        const isOwner = eventToDelete?.userId === auth.currentUser?.uid;
+
+        const message = isOwner 
+            ? "Are you sure you want to delete this event?" 
+            : "You are a collaborator. Remove this event from your list?";
+
+        Alert.alert("Remove Event", message, [
             { text: "Cancel", style: "cancel" },
-            { text: "Delete", style: "destructive", onPress: async () => {
-                await deleteDoc(doc(db, 'events', eventId));
+            { text: "Remove", style: "destructive", onPress: async () => {
+                if (isOwner) {
+                    await deleteDoc(doc(db, 'events', eventId));
+                } else {
+                    // Logic to just remove yourself from the collaborator list instead of deleting the whole event
+                    const docRef = doc(db, 'events', eventId);
+                    const updatedCollabs = eventToDelete.collaborators.filter(email => email !== auth.currentUser.email.toLowerCase());
+                    await updateDoc(docRef, { collaborators: updatedCollabs });
+                }
             }}
         ]);
     };
@@ -150,7 +179,6 @@ export default function DashboardScreen({ navigation }) {
             >
                 <DashboardHeader userData={userData} greeting={greeting} navigation={navigation} />
 
-                {/* Stats Section */}
                 <View style={styles.statsContainer}>
                     <View style={styles.statsCard}>
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
@@ -167,11 +195,9 @@ export default function DashboardScreen({ navigation }) {
                     </View>
                 </View>
 
-                {/* Quick Actions Section */}
                 <View style={styles.sectionContainer}>
                     <CustomText style={styles.sectionTitle}>Quick Actions</CustomText>
                     <View style={{ flexDirection: 'row', gap: 12 }}>
-                        {/* Modified "Past Events" button to trigger Modal instead of navigation */}
                         <TouchableOpacity style={styles.actionButton} onPress={() => setShowPastModal(true)}>
                             <Ionicons name="time-outline" size={24} color="#6B7280" />
                             <CustomText style={styles.actionText}>Past Events</CustomText>
@@ -189,7 +215,6 @@ export default function DashboardScreen({ navigation }) {
                     </View>
                 </View>
 
-                {/* Happening Now Section - Navigates to EventDetails */}
                 {liveEvents.length > 0 && (
                     <View style={styles.sectionContainer}>
                         <View style={styles.liveHeader}>
@@ -215,7 +240,6 @@ export default function DashboardScreen({ navigation }) {
                     </View>
                 )}
 
-                {/* Upcoming Section - Navigates to EventDetails */}
                 <View style={[styles.sectionContainer, { marginBottom: 100 }]}>
                     <CustomText style={styles.sectionTitle}>Upcoming Events</CustomText>
                     {loading ? (
@@ -242,7 +266,6 @@ export default function DashboardScreen({ navigation }) {
                 </View>
             </ScrollView>
 
-            {/* Past Events Modal Component */}
             <Modal visible={showPastModal} animationType="slide" transparent={true}>
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
@@ -269,13 +292,9 @@ export default function DashboardScreen({ navigation }) {
                             ListEmptyComponent={<CustomText style={styles.emptyText}>No past events to show.</CustomText>}
                         />
                     </View>
-
-                    
                 </View>
-    
             </Modal>
 
-            {/* Floating Action Button */}
             <TouchableOpacity 
                 style={styles.fab} 
                 onPress={() => navigation.navigate('AddEvent')}
@@ -287,6 +306,7 @@ export default function DashboardScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
+    // (Styles remain identical to yours)
     fab: {
         position: 'absolute',
         right: 20,
@@ -324,7 +344,6 @@ const styles = StyleSheet.create({
     eventDate: { color: '#6B7280', fontSize: 13 },
     emptyState: { backgroundColor: '#FFFFFF', borderRadius: 12, padding: 20, alignItems: 'center' },
     emptyText: { color: '#9CA3AF' },
-    // Modal Styles
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
     modalContent: { backgroundColor: '#FFF', height: height * 0.7, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
@@ -332,5 +351,4 @@ const styles = StyleSheet.create({
     pastEventItem: { flexDirection: 'row', padding: 15, borderBottomWidth: 1, borderBottomColor: '#F3F4F6', alignItems: 'center' },
     pastTitle: { fontWeight: 'bold', fontSize: 16 },
     pastDate: { color: '#6B7280', fontSize: 12 }
-    
 });

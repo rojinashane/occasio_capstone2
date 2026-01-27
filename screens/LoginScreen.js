@@ -19,6 +19,45 @@ import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../firebase';
 import { signInWithEmailAndPassword, reload } from 'firebase/auth';
 
+// ... existing imports
+
+const handleLogin = async () => {
+  // 1. Your existing validation
+  if (!email || !password) {
+    Alert.alert('Error', 'Please fill in all fields');
+    return;
+  }
+
+  setLoading(true);
+  try {
+    // 2. This is the Firebase call you already have
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    const user = userCredential.user;
+
+    // --- PASTE THE NEW LOGIC BELOW ---
+    
+    if (!user.emailVerified) {
+      await signOut(auth); // Immediately kick them out
+      setLoading(false);
+      Alert.alert(
+        'Verify Your Email',
+        'You must verify your email before logging in. Please check your inbox.'
+      );
+      return; // Exit the function so they don't go to the Home screen
+    }
+
+    // --- PASTE THE NEW LOGIC ABOVE ---
+
+    // 3. If it gets here, they ARE verified. 
+    // Navigation usually happens automatically via your Auth Listener
+    
+  } catch (error) {
+    Alert.alert('Login Error', error.message);
+  } finally {
+    setLoading(false);
+  }
+};
+
 export default function LoginScreen({ navigation }) {
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const slideUpAnim = useRef(new Animated.Value(20)).current;

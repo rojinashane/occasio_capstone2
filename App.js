@@ -5,15 +5,18 @@ import { ActivityIndicator, View } from 'react-native';
 import { auth } from './firebase';
 import { onAuthStateChanged, reload } from 'firebase/auth';
 
+// 1. IMPORT GestureHandlerRootView
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+
 // Screens
 import LandingScreen from './screens/LandingScreen';
 import LoginScreen from './screens/LoginScreen';
 import SignupScreen from './screens/SignupScreen';
 import DashboardScreen from './screens/DashboardScreen';
 import AddEvent from './components/AddEvent';
-import MyEventsScreen from './screens/MyEventsScreen'; 
+import MyEventsScreen from './screens/MyEventsScreen';
 import EventDetailsScreen from './screens/EventDetailsScreen';
-import UpdateEvent from './components/UpdateEvent'; // ✅ ADD THIS IMPORT
+import UpdateEvent from './components/UpdateEvent'; 
 
 const Stack = createNativeStackNavigator();
 
@@ -51,24 +54,26 @@ export default function App() {
   }
 
   return (
-    <NavigationContainer>
-      <Stack.Navigator
-        initialRouteName={initialRoute}
-        screenOptions={{
-          headerShown: false,
-          animation: 'slide_from_right',
-        }}
-      >
-        <Stack.Screen name="Landing" component={LandingScreen} />
-        <Stack.Screen name="Login" component={LoginScreen} />
-        <Stack.Screen name="Signup" component={SignupScreen} />
-        <Stack.Screen name="Dashboard" component={DashboardScreen} />
-        <Stack.Screen name="AddEvent" component={AddEvent} />
-        <Stack.Screen name="MyEvents" component={MyEventsScreen} />
-        <Stack.Screen name="EventDetails" component={EventDetailsScreen} /> 
-        {/* ✅ REGISTERED THE UPDATE SCREEN HERE */}
-        <Stack.Screen name="UpdateEvent" component={UpdateEvent} /> 
-      </Stack.Navigator>
-    </NavigationContainer>
+    // 2. WRAP EVERYTHING HERE
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <NavigationContainer>
+        <Stack.Navigator
+          initialRouteName={initialRoute}
+          screenOptions={{
+            headerShown: false,
+            animation: 'slide_from_right',
+          }}
+        >
+          <Stack.Screen name="Landing" component={LandingScreen} />
+          <Stack.Screen name="Login" component={LoginScreen} />
+          <Stack.Screen name="Signup" component={SignupScreen} />
+          <Stack.Screen name="Dashboard" component={DashboardScreen} />
+          <Stack.Screen name="AddEvent" component={AddEvent} />
+          <Stack.Screen name="MyEvents" component={MyEventsScreen} />
+          <Stack.Screen name="EventDetails" component={EventDetailsScreen} />
+          <Stack.Screen name="UpdateEvent" component={UpdateEvent} />
+        </Stack.Navigator>
+      </NavigationContainer>
+    </GestureHandlerRootView>
   );
 }
