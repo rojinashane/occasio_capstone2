@@ -14,9 +14,9 @@ import LoginScreen from './screens/LoginScreen';
 import SignupScreen from './screens/SignupScreen';
 import DashboardScreen from './screens/DashboardScreen';
 import AddEvent from './components/AddEvent';
-import MyEventsScreen from './screens/MyEventsScreen';
 import EventDetailsScreen from './screens/EventDetailsScreen';
 import UpdateEvent from './components/UpdateEvent'; 
+import ProfileScreen from './screens/ProfileScreen'; 
 
 const Stack = createNativeStackNavigator();
 
@@ -69,9 +69,9 @@ export default function App() {
           <Stack.Screen name="Signup" component={SignupScreen} />
           <Stack.Screen name="Dashboard" component={DashboardScreen} />
           <Stack.Screen name="AddEvent" component={AddEvent} />
-          <Stack.Screen name="MyEvents" component={MyEventsScreen} />
           <Stack.Screen name="EventDetails" component={EventDetailsScreen} />
           <Stack.Screen name="UpdateEvent" component={UpdateEvent} />
+          <Stack.Screen name="Profile" component={ProfileScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </GestureHandlerRootView>
