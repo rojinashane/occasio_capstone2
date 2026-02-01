@@ -16,18 +16,18 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Calendar } from 'react-native-calendars';
 import CustomText from '../components/CustomText';
 import DashboardHeader from '../components/Header';
-import NotificationModal from '../components/NotificationModal'; 
+import NotificationModal from '../components/NotificationModal';
 import { Ionicons } from '@expo/vector-icons';
 import { auth, db } from '../firebase';
 import { signOut } from 'firebase/auth';
-import { 
-    doc, 
-    getDoc, 
-    collection, 
-    query, 
-    onSnapshot, 
-    or, 
-    where 
+import {
+    doc,
+    getDoc,
+    collection,
+    query,
+    onSnapshot,
+    or,
+    where
 } from 'firebase/firestore';
 
 const { width } = Dimensions.get('window');
@@ -46,9 +46,9 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 
 export default function DashboardScreen({ navigation }) {
     const [userData, setUserData] = useState(null);
-    const [allEvents, setAllEvents] = useState([]); 
-    const [viewMode, setViewMode] = useState('list'); 
-    const [currentFilter, setCurrentFilter] = useState('upcoming'); 
+    const [allEvents, setAllEvents] = useState([]);
+    const [viewMode, setViewMode] = useState('list');
+    const [currentFilter, setCurrentFilter] = useState('upcoming');
     const [loading, setLoading] = useState(true);
     const [greeting, setGreeting] = useState('');
     const [stats, setStats] = useState({ total: 0, upcoming3Months: 0, shared: 0 });
@@ -89,13 +89,13 @@ export default function DashboardScreen({ navigation }) {
         if (open) {
             setMenuVisible(true);
             Animated.timing(slideAnim, {
-                toValue: width * 0.25, 
+                toValue: width * 0.25,
                 duration: 300,
                 useNativeDriver: true,
             }).start();
         } else {
             Animated.timing(slideAnim, {
-                toValue: width, 
+                toValue: width,
                 duration: 250,
                 useNativeDriver: true,
             }).start(() => setMenuVisible(false));
@@ -106,14 +106,16 @@ export default function DashboardScreen({ navigation }) {
         toggleMenu(false);
         Alert.alert('Logout', 'Are you sure you want to logout?', [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'Logout', style: 'destructive', onPress: async () => {
-                try {
-                    await signOut(auth);
-                    navigation.replace('Landing');
-                } catch (error) {
-                    Alert.alert('Error', 'Failed to logout.');
+            {
+                text: 'Logout', style: 'destructive', onPress: async () => {
+                    try {
+                        await signOut(auth);
+                        navigation.replace('Landing');
+                    } catch (error) {
+                        Alert.alert('Error', 'Failed to logout.');
+                    }
                 }
-            }}
+            }
         ]);
     };
 
@@ -143,7 +145,7 @@ export default function DashboardScreen({ navigation }) {
     };
 
     const listData = useMemo(() => {
-        const today = new Date().setHours(0,0,0,0);
+        const today = new Date().setHours(0, 0, 0, 0);
         const user = auth.currentUser;
         if (!user) return [];
         let filtered = [...allEvents];
@@ -198,12 +200,11 @@ export default function DashboardScreen({ navigation }) {
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
             <ScrollView showsVerticalScrollIndicator={false}>
-                <DashboardHeader 
-                    userData={userData} 
-                    greeting={greeting} 
-                    navigation={navigation} 
-                    onOpenMenu={() => toggleMenu(true)} 
-                    onOpenNotif={() => setNotifVisible(true)} // Passes trigger to Header
+                <DashboardHeader
+                    userData={userData}
+                    greeting={greeting}
+                    onPressAvatar={() => toggleMenu(true)}
+                    onOpenNotifications={() => setNotifVisible(true)}
                 />
 
                 <View style={styles.content}>
@@ -224,11 +225,11 @@ export default function DashboardScreen({ navigation }) {
                     <View style={styles.viewSwitcher}>
                         <TouchableOpacity style={[styles.switchBtn, viewMode === 'list' && styles.switchBtnActive]} onPress={() => setViewMode('list')}>
                             <Ionicons name="list" size={18} color={viewMode === 'list' ? '#FFF' : '#6B7280'} />
-                            <CustomText style={[styles.switchText, viewMode === 'list' && {color: '#FFF'}]}>List View</CustomText>
+                            <CustomText style={[styles.switchText, viewMode === 'list' && { color: '#FFF' }]}>List View</CustomText>
                         </TouchableOpacity>
                         <TouchableOpacity style={[styles.switchBtn, viewMode === 'calendar' && styles.switchBtnActive]} onPress={() => { setViewMode('calendar'); setCurrentFilter('upcoming'); }}>
                             <Ionicons name="calendar" size={18} color={viewMode === 'calendar' ? '#FFF' : '#6B7280'} />
-                            <CustomText style={[styles.switchText, viewMode === 'calendar' && {color: '#FFF'}]}>Calendar</CustomText>
+                            <CustomText style={[styles.switchText, viewMode === 'calendar' && { color: '#FFF' }]}>Calendar</CustomText>
                         </TouchableOpacity>
                     </View>
 
@@ -262,9 +263,9 @@ export default function DashboardScreen({ navigation }) {
             </ScrollView>
 
             {/* INTEGRATED NOTIFICATION MODAL */}
-            <NotificationModal 
-                visible={notifVisible} 
-                onClose={() => setNotifVisible(false)} 
+            <NotificationModal
+                visible={notifVisible}
+                onClose={() => setNotifVisible(false)}
             />
 
             {menuVisible && (
@@ -382,9 +383,9 @@ const styles = StyleSheet.create({
     fab: { position: 'absolute', right: 20, bottom: 30, backgroundColor: '#00686F', width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center', elevation: 6 },
     drawerOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.4)' },
     sideDrawer: {
-        position: 'absolute', top: 0, right: 0, bottom: 0, width: width * 0.75, 
-        backgroundColor: '#FFF', paddingHorizontal: 20, elevation: 20, 
-        shadowColor: '#000', shadowOffset: { width: -10, height: 0 }, shadowOpacity: 0.1, shadowRadius: 10 
+        position: 'absolute', top: 0, right: 0, bottom: 0, width: width * 0.75,
+        backgroundColor: '#FFF', paddingHorizontal: 20, elevation: 20,
+        shadowColor: '#000', shadowOffset: { width: -10, height: 0 }, shadowOpacity: 0.1, shadowRadius: 10
     },
     drawerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 20, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
     drawerMenuTitle: { fontSize: 20, fontWeight: '800', color: '#1E293B' },

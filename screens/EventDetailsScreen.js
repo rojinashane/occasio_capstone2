@@ -1,20 +1,20 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-    View, StyleSheet, ScrollView, TouchableOpacity, Dimensions,
+import {
+    View, StyleSheet, TouchableOpacity, Dimensions,
     ActivityIndicator, StatusBar, TextInput, Modal, KeyboardAvoidingView,
-    Platform, Animated, Alert 
+    Platform, Animated, Alert, FlatList
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { db, auth } from '../firebase'; // Ensure auth is exported from your firebase config
-import { 
-    doc, getDoc, updateDoc, deleteDoc, 
-    collection, query, where, getDocs, addDoc, serverTimestamp 
-} from 'firebase/firestore'; 
+import { db, auth } from '../firebase';
+import {
+    doc, getDoc, updateDoc, deleteDoc,
+    collection, query, where, getDocs, addDoc, serverTimestamp, limit
+} from 'firebase/firestore';
 import CustomText from '../components/CustomText';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
-import { Swipeable } from 'react-native-gesture-handler';
+import { Swipeable, ScrollView } from 'react-native-gesture-handler';
 
 const { width, height } = Dimensions.get('window');
 const COLUMN_WIDTH = width * 0.82;
@@ -32,14 +32,15 @@ export default function EventDetailsScreen({ route, navigation }) {
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(false);
     const [columns, setColumns] = useState([]);
-    
+    const [foundUsers, setFoundUsers] = useState([]);
+
     // UI State Modals
     const [modalVisible, setModalVisible] = useState(false);
     const [detailModalVisible, setDetailModalVisible] = useState(false);
     const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
     const [menuVisible, setMenuVisible] = useState(false);
     const [collabModalVisible, setCollabModalVisible] = useState(false);
-    
+
     const [modalConfig, setModalConfig] = useState({ type: '', columnId: '', taskId: '', title: '' });
     const [listToDelete, setListToDelete] = useState(null);
     const [inputText, setInputText] = useState('');
@@ -51,21 +52,31 @@ export default function EventDetailsScreen({ route, navigation }) {
     const [activeColumnId, setActiveColumnId] = useState(null);
 
     useFocusEffect(
-        useCallback(() => { fetchEvent(); }, [eventId])
-    );
+        useCallback(() => {
+            let isActive = true;
 
-    const fetchEvent = async () => {
-        try {
-            const docRef = doc(db, 'events', eventId);
-            const docSnap = await getDoc(docRef);
-            if (docSnap.exists()) {
-                const data = docSnap.data();
-                setEventData(data);
-                if (data.columns) setColumns(data.columns);
-            }
-        } catch (error) { console.error("Fetch Error:", error); } 
-        finally { setLoading(false); }
-    };
+            const fetchEvent = async () => {
+                try {
+                    const docRef = doc(db, 'events', eventId);
+                    const docSnap = await getDoc(docRef);
+
+                    if (docSnap.exists() && isActive) {
+                        const data = docSnap.data();
+                        setEventData(data);
+                        if (data.columns) setColumns(data.columns);
+                    }
+                } catch (error) {
+                    console.error("Fetch Error:", error);
+                } finally {
+                    if (isActive) setLoading(false);
+                }
+            };
+
+            fetchEvent();
+
+            return () => { isActive = false; };
+        }, [eventId])
+    );
 
     const syncToFirebase = async (updatedColumns) => {
         try {
@@ -82,15 +93,15 @@ export default function EventDetailsScreen({ route, navigation }) {
             "This will permanently delete the event and all tasks for everyone. Continue?",
             [
                 { text: "Cancel", style: "cancel" },
-                { 
-                    text: "Delete Forever", 
-                    style: "destructive", 
+                {
+                    text: "Delete Forever",
+                    style: "destructive",
                     onPress: async () => {
                         try {
                             await deleteDoc(doc(db, 'events', eventId));
                             navigation.navigate('Dashboard');
                         } catch (error) { Alert.alert("Error", "Could not delete workspace."); }
-                    } 
+                    }
                 }
             ]
         );
@@ -105,7 +116,6 @@ export default function EventDetailsScreen({ route, navigation }) {
 
         setActionLoading(true);
         try {
-            // 1. Check if user is registered
             const usersRef = collection(db, 'users');
             const q = query(usersRef, where("email", "==", collabEmail.trim().toLowerCase()));
             const querySnapshot = await getDocs(q);
@@ -118,7 +128,6 @@ export default function EventDetailsScreen({ route, navigation }) {
 
             const recipientId = querySnapshot.docs[0].id;
 
-            // 2. Send Invitation Request
             await addDoc(collection(db, 'notifications'), {
                 type: 'COLLAB_REQUEST',
                 senderName: auth.currentUser?.displayName || "A user",
@@ -132,7 +141,7 @@ export default function EventDetailsScreen({ route, navigation }) {
 
             setCollabModalVisible(false);
             setCollabEmail('');
-            Alert.alert("Invitation Sent", `We've sent a request to ${collabEmail}. they will appear here once they accept.`);
+            Alert.alert("Invitation Sent", `We've sent a request to ${collabEmail}. They will appear here once they accept.`);
         } catch (error) {
             console.error("Collab Error:", error);
             Alert.alert("Error", "Failed to send invitation.");
@@ -141,7 +150,7 @@ export default function EventDetailsScreen({ route, navigation }) {
         }
     };
 
-    // --- LIST & CARD LOGIC (EXISTING) ---
+    // --- LIST & CARD LOGIC ---
     const updateColumnTitle = async (columnId, newTitle) => {
         const updated = columns.map(col => col.id === columnId ? { ...col, title: newTitle } : col);
         setColumns(updated);
@@ -206,8 +215,8 @@ export default function EventDetailsScreen({ route, navigation }) {
         if (modalConfig.type === 'ADD_COLUMN') {
             newColumns.push({ id: Date.now().toString(), title: inputText, tasks: [] });
         } else if (modalConfig.type === 'ADD_TASK') {
-            newColumns = columns.map(col => col.id === modalConfig.columnId ? { 
-                ...col, tasks: [...col.tasks, { id: Date.now().toString(), text: inputText, completed: false, priority: 'C', description: '', subtasks: [] }] 
+            newColumns = columns.map(col => col.id === modalConfig.columnId ? {
+                ...col, tasks: [...col.tasks, { id: Date.now().toString(), text: inputText, completed: false, priority: 'C', description: '', subtasks: [] }]
             } : col);
         }
         setColumns(newColumns);
@@ -220,11 +229,43 @@ export default function EventDetailsScreen({ route, navigation }) {
 
     if (loading) return <View style={styles.loadingContainer}><ActivityIndicator size="large" color="#00686F" /></View>;
 
+    const handleSearchUsers = async (text) => {
+        setCollabEmail(text);
+        if (text.length < 3) {
+            setFoundUsers([]);
+            return;
+        }
+        const cleanText = text.toLowerCase();
+        try {
+            const usersRef = collection(db, 'users');
+            const q = query(
+                usersRef,
+                where('email', '>=', cleanText),
+                where('email', '<=', cleanText + '\uf8ff'),
+                limit(5)
+            );
+            const querySnapshot = await getDocs(q);
+            const users = querySnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            const filteredUsers = users.filter(u => u.email !== auth.currentUser?.email);
+            setFoundUsers(filteredUsers);
+        } catch (error) {
+            console.log("Search error:", error);
+        }
+    };
+
+    const selectUser = (email) => {
+        setCollabEmail(email);
+        setFoundUsers([]);
+    };
+
     return (
         <View style={styles.mainContainer}>
             <StatusBar barStyle="light-content" />
             <LinearGradient colors={['#004D52', '#00686F']} style={styles.gradientBg} />
-            
+
             <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
                 <View style={styles.headerContainer}>
                     <View style={styles.headerRow}>
@@ -242,7 +283,7 @@ export default function EventDetailsScreen({ route, navigation }) {
                 </View>
 
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} snapToInterval={COLUMN_WIDTH + 16} decelerationRate="fast" contentContainerStyle={styles.boardContent}>
-                    {/* OVERVIEW */}
+                    {/* OVERVIEW COLUMN */}
                     <View style={[styles.column, styles.infoColumn]}>
                         <View style={styles.columnHeader}>
                             <View style={styles.row}>
@@ -258,6 +299,40 @@ export default function EventDetailsScreen({ route, navigation }) {
                             <View style={styles.detailCard}><CustomText style={styles.infoLabel}>LOCATION</CustomText><CustomText style={styles.infoValue}>{eventData?.location || "TBD"}</CustomText></View>
                             <View style={styles.detailCard}><CustomText style={styles.infoLabel}>START DATE</CustomText><CustomText style={styles.infoValue}>{formatDate(eventData?.startDate)}</CustomText></View>
                             <View style={styles.detailCard}><CustomText style={styles.infoLabel}>DESCRIPTION</CustomText><CustomText style={styles.infoValue}>{eventData?.description || "No description provided"}</CustomText></View>
+
+                            {/* --- NEW SECTION: TEAM / COLLABORATORS --- */}
+                            <View style={styles.detailCard}>
+                                <CustomText style={styles.infoLabel}>TEAM</CustomText>
+                                <View style={styles.collabContainer}>
+                                    {/* Show Owner (if available) or assume current user created it, but usually best to rely on data */}
+                                    <View style={[styles.collabChip, { borderColor: '#00686F', backgroundColor: '#F0F9FA' }]}>
+                                        <View style={[styles.collabAvatar, { backgroundColor: '#00686F' }]}>
+                                            <Ionicons name="star" size={10} color="#FFF" />
+                                        </View>
+                                        <CustomText style={[styles.collabEmail, { color: '#00686F', fontWeight: 'bold' }]}>Owner</CustomText>
+                                    </View>
+
+                                    {/* Show Collaborators List */}
+                                    {eventData?.collaborators && eventData.collaborators.length > 0 ? (
+                                        eventData.collaborators.map((email, index) => (
+                                            <View key={index} style={styles.collabChip}>
+                                                <View style={styles.collabAvatar}>
+                                                    <CustomText style={styles.collabAvatarText}>
+                                                        {email.charAt(0).toUpperCase()}
+                                                    </CustomText>
+                                                </View>
+                                                <CustomText style={styles.collabEmail} numberOfLines={1}>
+                                                    {email}
+                                                </CustomText>
+                                            </View>
+                                        ))
+                                    ) : (
+                                        <CustomText style={styles.noCollabText}>No additional members</CustomText>
+                                    )}
+                                </View>
+                            </View>
+                            {/* --- END NEW SECTION --- */}
+
                         </ScrollView>
                     </View>
 
@@ -272,7 +347,7 @@ export default function EventDetailsScreen({ route, navigation }) {
                                 {col.tasks.map((task) => (
                                     <Swipeable key={task.id} renderRightActions={(p, d) => (
                                         <TouchableOpacity style={styles.deleteSwipeAction} onPress={() => {
-                                            const updated = columns.map(c => c.id === col.id ? {...c, tasks: c.tasks.filter(t => t.id !== task.id)} : c);
+                                            const updated = columns.map(c => c.id === col.id ? { ...c, tasks: c.tasks.filter(t => t.id !== task.id) } : c);
                                             setColumns(updated); syncToFirebase(updated);
                                         }}>
                                             <Ionicons name="trash-outline" size={24} color="#FFF" />
@@ -320,23 +395,48 @@ export default function EventDetailsScreen({ route, navigation }) {
 
             {/* COLLABORATOR INVITE MODAL */}
             <Modal transparent visible={collabModalVisible} animationType="fade">
-                <KeyboardAvoidingView behavior="padding" style={styles.modalOverlay}>
+                <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <CustomText style={styles.modalTitle}>Invite Collaborator</CustomText>
-                        <CustomText style={styles.modalSubLabel}>Enter the email of a registered user to send a request.</CustomText>
-                        <TextInput 
-                            style={styles.modalInput} 
-                            autoFocus 
-                            placeholder="email@example.com" 
-                            value={collabEmail} 
-                            onChangeText={setCollabEmail} 
+                        <CustomText style={styles.modalSubLabel}>Search for a user by email to send a request.</CustomText>
+
+                        <TextInput
+                            style={styles.modalInput}
+                            autoFocus
+                            placeholder="Start typing email..."
+                            value={collabEmail}
+                            onChangeText={handleSearchUsers}
                             autoCapitalize="none"
                             keyboardType="email-address"
                         />
+                        {foundUsers.length > 0 && (
+                            <View style={styles.searchResultsContainer}>
+                                <FlatList
+                                    data={foundUsers}
+                                    keyExtractor={(item) => item.id}
+                                    keyboardShouldPersistTaps="handled"
+                                    renderItem={({ item }) => (
+                                        <TouchableOpacity style={styles.userResultItem} onPress={() => selectUser(item.email)}>
+                                            <View style={styles.userAvatarPlaceholder}>
+                                                <CustomText style={{ color: '#FFF', fontWeight: 'bold' }}>
+                                                    {item.displayName ? item.displayName.charAt(0).toUpperCase() : '?'}
+                                                </CustomText>
+                                            </View>
+                                            <View>
+                                                <CustomText style={styles.resultName}>{item.displayName || 'User'}</CustomText>
+                                                <CustomText style={styles.resultEmail}>{item.email}</CustomText>
+                                            </View>
+                                        </TouchableOpacity>
+                                    )}
+                                />
+                            </View>
+                        )}
                         <View style={styles.modalButtons}>
-                            <TouchableOpacity onPress={() => setCollabModalVisible(false)} style={styles.modalCancel}><CustomText style={{color: '#64748B'}}>Cancel</CustomText></TouchableOpacity>
+                            <TouchableOpacity onPress={() => { setCollabModalVisible(false); setFoundUsers([]); }} style={styles.modalCancel}>
+                                <CustomText style={{ color: '#64748B' }}>Cancel</CustomText>
+                            </TouchableOpacity>
                             <TouchableOpacity onPress={handleAddCollaborator} style={styles.modalSave} disabled={actionLoading}>
-                                {actionLoading ? <ActivityIndicator color="#FFF" /> : <CustomText style={{color: '#FFF', fontWeight: 'bold'}}>Send Request</CustomText>}
+                                {actionLoading ? <ActivityIndicator color="#FFF" /> : <CustomText style={{ color: '#FFF', fontWeight: 'bold' }}>Send Request</CustomText>}
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -350,8 +450,8 @@ export default function EventDetailsScreen({ route, navigation }) {
                         <CustomText style={styles.modalTitle}>{modalConfig.title}</CustomText>
                         <TextInput style={styles.modalInput} autoFocus value={inputText} onChangeText={setInputText} placeholder="Name..." />
                         <View style={styles.modalButtons}>
-                            <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.modalCancel}><CustomText style={{color: '#64748B'}}>Cancel</CustomText></TouchableOpacity>
-                            <TouchableOpacity onPress={handleModalSubmit} style={styles.modalSave}><CustomText style={{color: '#FFF', fontWeight: 'bold'}}>Confirm</CustomText></TouchableOpacity>
+                            <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.modalCancel}><CustomText style={{ color: '#64748B' }}>Cancel</CustomText></TouchableOpacity>
+                            <TouchableOpacity onPress={handleModalSubmit} style={styles.modalSave}><CustomText style={{ color: '#FFF', fontWeight: 'bold' }}>Confirm</CustomText></TouchableOpacity>
                         </View>
                     </View>
                 </KeyboardAvoidingView>
@@ -375,25 +475,25 @@ export default function EventDetailsScreen({ route, navigation }) {
             <Modal visible={detailModalVisible} animationType="slide" presentationStyle="pageSheet">
                 <View style={styles.detailModalContainer}>
                     <View style={styles.detailHeader}>
-                        <TouchableOpacity onPress={() => setDetailModalVisible(false)}><CustomText style={{color: '#64748B'}}>Close</CustomText></TouchableOpacity>
+                        <TouchableOpacity onPress={() => setDetailModalVisible(false)}><CustomText style={{ color: '#64748B' }}>Close</CustomText></TouchableOpacity>
                         <CustomText style={styles.detailHeaderTitle}>Edit Card</CustomText>
-                        <TouchableOpacity onPress={saveTaskDetails}><CustomText style={{color: '#00686F', fontWeight: 'bold'}}>Save</CustomText></TouchableOpacity>
+                        <TouchableOpacity onPress={saveTaskDetails}><CustomText style={{ color: '#00686F', fontWeight: 'bold' }}>Save</CustomText></TouchableOpacity>
                     </View>
                     <ScrollView style={{ padding: 20 }}>
                         <CustomText style={styles.detailLabel}>CARD TITLE</CustomText>
-                        <TextInput style={styles.detailTitleInput} value={activeTask?.text} onChangeText={(t) => setActiveTask({...activeTask, text: t})} />
-                        
+                        <TextInput style={styles.detailTitleInput} value={activeTask?.text} onChangeText={(t) => setActiveTask({ ...activeTask, text: t })} />
+
                         <CustomText style={styles.detailLabel}>PRIORITY</CustomText>
                         <View style={styles.priorityRow}>
                             {['A', 'B', 'C'].map((p) => (
-                                <TouchableOpacity key={p} onPress={() => setActiveTask({...activeTask, priority: p})} style={[styles.priorityBtn, { backgroundColor: activeTask?.priority === p ? getPriorityColor(p) : '#F1F5F9' }]}>
+                                <TouchableOpacity key={p} onPress={() => setActiveTask({ ...activeTask, priority: p })} style={[styles.priorityBtn, { backgroundColor: activeTask?.priority === p ? getPriorityColor(p) : '#F1F5F9' }]}>
                                     <CustomText style={{ color: activeTask?.priority === p ? '#FFF' : '#64748B' }}>{p === 'A' ? 'High' : p === 'B' ? 'Med' : 'Low'}</CustomText>
                                 </TouchableOpacity>
                             ))}
                         </View>
 
                         <CustomText style={styles.detailLabel}>DESCRIPTION</CustomText>
-                        <TextInput style={styles.detailDescInput} multiline value={activeTask?.description} onChangeText={(t) => setActiveTask({...activeTask, description: t})} />
+                        <TextInput style={styles.detailDescInput} multiline value={activeTask?.description} onChangeText={(t) => setActiveTask({ ...activeTask, description: t })} />
 
                         <CustomText style={styles.detailLabel}>CHECKLIST</CustomText>
                         {activeTask?.subtasks?.map((item) => (
@@ -408,7 +508,7 @@ export default function EventDetailsScreen({ route, navigation }) {
                             <TextInput style={styles.checklistInput} placeholder="Add item..." value={subtaskText} onChangeText={setSubtaskText} />
                             <TouchableOpacity onPress={addChecklistItem} style={styles.miniAddBtn}><Ionicons name="add" size={24} color="#FFF" /></TouchableOpacity>
                         </View>
-                        <View style={{height: 100}} />
+                        <View style={{ height: 100 }} />
                     </ScrollView>
                 </View>
             </Modal>
@@ -485,4 +585,80 @@ const styles = StyleSheet.create({
     deleteCancelBtn: { padding: 12 },
     deleteConfirmBtn: { backgroundColor: '#EF4444', paddingVertical: 10, paddingHorizontal: 20, borderRadius: 10 },
     deleteConfirmText: { color: '#FFF', fontWeight: 'bold' },
+    searchResultsContainer: {
+        maxHeight: 150,
+        backgroundColor: '#F8FAFC',
+        borderRadius: 12,
+        marginBottom: 15,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    userResultItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#E2E8F0',
+    },
+    userAvatarPlaceholder: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: '#00686F',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+    },
+    resultName: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#1E293B',
+    },
+    resultEmail: {
+        fontSize: 12,
+        color: '#64748B',
+    },
+    // --- NEW STYLES FOR COLLABORATORS ---
+    collabContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    collabChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F1F5F9',
+        borderRadius: 20,
+        paddingRight: 10,
+        paddingLeft: 4,
+        paddingVertical: 4,
+        marginBottom: 6,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    collabAvatar: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: '#94A3B8',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 6,
+    },
+    collabAvatarText: {
+        color: '#FFF',
+        fontSize: 10,
+        fontWeight: 'bold',
+    },
+    collabEmail: {
+        fontSize: 11,
+        color: '#334155',
+        fontWeight: '600',
+        maxWidth: 150,
+    },
+    noCollabText: {
+        fontSize: 12,
+        color: '#94A3B8',
+        fontStyle: 'italic',
+    }
 });
